@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Transcription Result</title>
+    <style>
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        table, th, td {
+            border: 1px solid black;
+        }
+        th, td {
+            padding: 15px;
+            text-align: left;
+        }
+        .sentiment {
+            display: flex;
+            align-items: center;
+        }
+        .sentiment .circle {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 5px;
+        }
+        .positive {
+            background-color: green;
+        }
+        .neutral {
+            background-color: yellow;
+        }
+        .negative {
+            background-color: red;
+        }
+    </style>
+</head>
+<body>
+    <h1>Transcription Result</h1>
+    <table>
+        <tr>
+            <th>Speaker</th>
+            <th>Text</th>
+            <th>Sentiment</th>
+        </tr>
+        {% for segment in transcription %}
+        <tr>
+            <td>{{ segment.speaker }}</td>
+            <td>{{ segment.text }}</td>
+            <td>
+                <div class="sentiment">
+                    <div class="circle {% if segment.sentiment.label == 'POSITIVE' %}positive{% elif segment.sentiment.label == 'NEUTRAL' %}neutral{% elif segment.sentiment.label == 'NEGATIVE' %}negative{% endif %}"></div>
+                    <span>{{ (segment.sentiment.score * 100)|round }}%</span>
+                </div>
+            </td>
+        </tr>
+        {% endfor %}
+    </table>
+</body>
+</html>
