@@ -1,0 +1,16 @@
+# Ignore temporary files
+*.jar
+common_names.txt
+cuda.py
+diarization_model_path/
+directory.py
+download distilbert-base-uncased.py
+download_sentiment_model.py
+download_whisper_model.py
+models/
+path/
+script.py
+sentiment_model/
+temp_audio.wav
+uploads/
+whisper_model/
