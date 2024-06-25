@@ -1,16 +1,34 @@
 # Ignore temporary files
 *.jar
+*.pyc
+*.pyo
+*.pyd
+*.swp
 common_names.txt
+temp_audio.wav
+
+# Ignore Python scripts not needed in the repo
 cuda.py
-diarization_model_path/
 directory.py
-download distilbert-base-uncased.py
-download_sentiment_model.py
-download_whisper_model.py
+script.py
+
+# Ignore directories
+diarization_model_path/
 models/
 path/
-script.py
 sentiment_model/
-temp_audio.wav
-uploads/
 whisper_model/
+uploads/
+
+# Ignore download scripts
+download_distilbert-base-uncased.py
+download_sentiment_model.py
+download_whisper_model.py
+
+# Ignore virtual environments
+venv/
+env/
+
+# Ignore system files
+.DS_Store
+Thumbs.db
