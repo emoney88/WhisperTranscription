@@ -1,16 +1,14 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Transcription Service</title>
+    <meta charset="utf-8">
+    <title>Whisper Transcription</title>
 </head>
 <body>
-    <h1>Transcription, Diarization, and Sentiment Analysis Service</h1>
-    <form action="/transcribe" method="post" enctype="multipart/form-data">
-        <label for="audio">Upload Audio File:</label>
-        <input type="file" id="audio" name="audio" accept="audio/*" required>
-        <button type="submit">Transcribe</button>
+    <h1>Upload an audio file</h1>
+    <form method="post" enctype="multipart/form-data">
+        <input type="file" name="audio_file">
+        <input type="submit" value="Transcribe">
     </form>
 </body>
 </html>

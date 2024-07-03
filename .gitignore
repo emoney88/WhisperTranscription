@@ -32,3 +32,5 @@ env/
 # Ignore system files
 .DS_Store
 Thumbs.db
+temp_audio/aud-84f5e78642.wav
+temp_audio/aud-b7880b901d03808f9d60c200879845b4-87C3.wav

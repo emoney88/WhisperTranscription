@@ -1,38 +1,37 @@
 <!doctype html>
 <html lang="en">
 <head>
-    <meta charset="utf-8">
-    <title>Transcription Results</title>
-    <style>
-        body { font-family: Arial, sans-serif; }
-        h1 { color: #333; }
-        .transcription, .diarization, .sentiments { margin-bottom: 20px; }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Transcription Results</title>
 </head>
 <body>
-    <h1>Transcription Results</h1>
-
-    <div class="transcription">
-        <h2>Transcription:</h2>
-        <p>{{ transcription }}</p>
-    </div>
-
-    <div class="diarization">
-        <h2>Speaker Diarization:</h2>
-        <ul>
-            {% for segment in diarization %}
-                <li>{{ segment }}</li>
-            {% endfor %}
-        </ul>
-    </div>
-
-    <div class="sentiments">
-        <h2>Sentiments:</h2>
-        <ul>
-            {% for sentiment in sentiments %}
-                <li>{{ sentiment['label'] }} ({{ sentiment['score'] }})</li>
-            {% endfor %}
-        </ul>
-    </div>
+  <h1>Transcription Results</h1>
+  <h2>Transcription</h2>
+  <p>{{ transcription }}</p>
+  <h2>Sentiment</h2>
+  <p>Label: {{ sentiment.label }}</p>
+  <p>Score: {{ sentiment.score }}</p>
+  <h2>Diarization</h2>
+  <table border="1">
+    <thead>
+      <tr>
+        <th>Start</th>
+        <th>End</th>
+        <th>Speaker</th>
+        <th>Text</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for segment in diarization %}
+      <tr>
+        <td>{{ segment.start }}</td>
+        <td>{{ segment.end }}</td>
+        <td>{{ segment.speaker }}</td>
+        <td>{{ segment.text }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
 </body>
 </html>
