@@ -1,37 +1,44 @@
-<!doctype html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Transcription Results</title>
-</head>
-<body>
-    <h1>Transcription Results</h1>
-    <h2>Transcription</h2>
-    <p>{{ transcription }}</p>
-    <h2>Sentiment</h2>
-    <p>Label: {{ sentiment.label }}</p>
-    <p>Score: {{ sentiment.score }}</p>
-    <h2>Diarization</h2>
-    <table border="1">
-        <thead>
-            <tr>
-                <th>Start</th>
-                <th>End</th>
-                <th>Speaker</th>
-                <th>Text</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for segment in diarization %}
-            <tr>
-                <td>{{ segment.start }}</td>
-                <td>{{ segment.end }}</td>
-                <td>{{ segment.speaker }}</td>
-                <td>{{ segment.text }}</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-</body>
-</html>
+def generate_html(transcription, sentiment, diarization):
+    html_content = f"""
+    <!doctype html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Transcription Results</title>
+    </head>
+    <body>
+        <h1>Transcription Results</h1>
+        <h2>Transcription</h2>
+        <p>{transcription}</p>
+        <h2>Sentiment</h2>
+        <p>Label: {sentiment['label']}</p>
+        <p>Score: {sentiment['score']}</p>
+        <h2>Diarization</h2>
+        <table border="1">
+            <thead>
+                <tr>
+                    <th>Start</th>
+                    <th>End</th>
+                    <th>Speaker</th>
+                    <th>Text</th>
+                </tr>
+            </thead>
+            <tbody>
+    """
+    for entry in diarization:
+        html_content += f"""
+                <tr>
+                    <td>{entry['start']}</td>
+                    <td>{entry['end']}</td>
+                    <td>{entry['speaker']}</td>
+                    <td>{entry['text']}</td>
+                </tr>
+        """
+    html_content += """
+            </tbody>
+        </table>
+    </body>
+    </html>
+    """
+    return html_content

@@ -1,121 +1,156 @@
-import os
-import flask
-import torchaudio
+from flask import Flask, request, jsonify
 from transformers import pipeline
 from pyannote.audio import Pipeline
+import os
+import torch
+import torchaudio
+from io import BytesIO
 import whisper
+import html
 
-app = flask.Flask(__name__)
+app = Flask(__name__)
 
-whisper_model_path = "large-v2"
-diarization_model_path = "pyannote/speaker-diarization"
-auth_token = "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"
+# Load pre-trained pipelines
+diarization_pipeline = Pipeline.from_pretrained("pyannote/speaker-diarization", use_auth_token="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")
+sentiment_pipeline = pipeline("sentiment-analysis", model="distilbert/distilbert-base-uncased-finetuned-sst-2-english")
 
 # Load Whisper model
-try:
-    whisper_model = whisper.load_model(whisper_model_path)
-    print("Whisper model loaded successfully.")
-except Exception as e:
-    print(f"Error loading Whisper model: {e}")
+whisper_model = whisper.load_model("large-v2")  # Change to "large-v3" if necessary
 
-# Load Pyannote diarization pipeline
-try:
-    diarization_pipeline = Pipeline.from_pretrained(diarization_model_path, use_auth_token=auth_token)
-    print("Diarization pipeline loaded successfully.")
-except Exception as e:
-    print(f"Error loading diarization model: {e}")
-    diarization_pipeline = None
-
-# Load Sentiment Analysis pipeline
-try:
-    sentiment_pipeline = pipeline("sentiment-analysis")
-    print("Sentiment analysis pipeline loaded successfully.")
-except Exception as e:
-    print(f"Error loading sentiment analysis pipeline: {e}")
-    sentiment_pipeline = None
-
-@app.route("/transcribe", methods=["POST"])
-def transcribe():
-    if "file" not in flask.request.files:
-        return "No file provided", 400
+# Function to perform diarization
+def diarize_audio(file_path):
+    # Load audio file ensuring it is seekable
+    waveform, sample_rate = torchaudio.load(file_path)
+    temp_buffer = BytesIO()
+    torchaudio.save(temp_buffer, waveform, sample_rate, format="wav")
+    temp_buffer.seek(0)
     
-    audio_file = flask.request.files["file"]
-    audio_path = os.path.join("uploads", audio_file.filename)
-    audio_file.save(audio_path)
+    diarization_result = diarization_pipeline(temp_buffer)
+    segments = []
+    for segment in diarization_result.itersegments():
+        try:
+            speaker_label = diarization_result[segment].label
+        except KeyError:
+            speaker_label = "unknown"
+        segments.append({
+            "start": segment.start,
+            "end": segment.end,
+            "speaker": speaker_label
+        })
+    return segments
 
-    # Perform transcription
-    try:
-        result = whisper_model.transcribe(audio_path)
-        transcription = result["text"]
-        segments = result["segments"]
-        print(f"Transcription: {transcription}")
-        print(f"Segments: {segments}")
-    except Exception as e:
-        return f"Error during transcription: {e}", 500
+# Function to identify speaker names in the transcription
+def identify_speaker_names(transcription, diarization):
+    speaker_names = {}
+    words = transcription.split()
+    for i, word in enumerate(words):
+        if word.endswith(","):
+            speaker_name = word.rstrip(",")
+            next_word = words[i + 1] if i + 1 < len(words) else None
+            if next_word and next_word.lower() in ["says", "said", "speaks"]:
+                speaker_names[speaker_name] = "SPEAKER_{}".format(len(speaker_names) + 1)
+    return speaker_names
+
+# Function to update diarization segments with speaker names
+def update_diarization_with_names(diarization, speaker_names, transcription_segments):
+    updated_diarization = []
+    for segment in diarization:
+        speaker = segment['speaker']
+        if speaker in speaker_names:
+            segment['speaker'] = speaker_names[speaker]
+        
+        # Assign text to each segment
+        segment_text = []
+        for trans_segment in transcription_segments:
+            if trans_segment['start'] >= segment['start'] and trans_segment['start'] < segment['end']:
+                segment_text.append(trans_segment['text'])
+        segment['text'] = ' '.join(segment_text).strip() or "[No text found]"
+        updated_diarization.append(segment)
+    return updated_diarization
+
+# Function to generate HTML response
+def generate_html(transcription, sentiment, diarization):
+    html_content = f"""
+    <!doctype html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Transcription Results</title>
+    </head>
+    <body>
+        <h1>Transcription Results</h1>
+        <h2>Transcription</h2>
+        <p>{html.escape(transcription)}</p>
+        <h2>Sentiment</h2>
+        <p>Label: {html.escape(sentiment['label'])}</p>
+        <p>Score: {sentiment['score']:.2f}</p>
+        <h2>Diarization</h2>
+        <table border="1">
+            <thead>
+                <tr>
+                    <th>Start</th>
+                    <th>End</th>
+                    <th>Speaker</th>
+                    <th>Text</th>
+                </tr>
+            </thead>
+            <tbody>
+    """
+    for entry in diarization:
+        html_content += f"""
+                <tr>
+                    <td>{entry['start']:.2f}</td>
+                    <td>{entry['end']:.2f}</td>
+                    <td>{html.escape(entry['speaker'])}</td>
+                    <td>{html.escape(entry['text'])}</td>
+                </tr>
+        """
+    html_content += """
+            </tbody>
+        </table>
+    </body>
+    </html>
+    """
+    return html_content
+
+@app.route('/transcribe', methods=['POST'])
+def transcribe():
+    if 'file' not in request.files:
+        return jsonify({"error": "No file provided"}), 400
+
+    file = request.files['file']
+    file_path = os.path.join("uploads", file.filename)
+    file.save(file_path)
+
+    # Perform transcription using Whisper
+    transcription_result = whisper_model.transcribe(file_path)
+    transcription = transcription_result['text']
+
+    # Extract segments from transcription
+    transcription_segments = []
+    for segment in transcription_result['segments']:
+        transcription_segments.append({
+            'start': segment['start'],
+            'end': segment['end'],
+            'text': segment['text']
+        })
 
     # Perform sentiment analysis
-    try:
-        sentiment_result = sentiment_pipeline(transcription)
-        sentiment_label = sentiment_result[0]['label']
-        sentiment_score = sentiment_result[0]['score']
-        print(f"Sentiment: {sentiment_label}, Score: {sentiment_score}")
-    except Exception as e:
-        return f"Error during sentiment analysis: {e}", 500
+    sentiment_result = sentiment_pipeline(transcription)[0]
 
     # Perform diarization
-    diarization_segments = []
-    if diarization_pipeline:
-        try:
-            audio, sample_rate = torchaudio.load(audio_path)
-            diarization_result = diarization_pipeline({"waveform": audio, "sample_rate": sample_rate})
-            print("Diarization result:")
-            print(diarization_result)
+    diarization_segments = diarize_audio(file_path)
 
-            # Create segments with corresponding text
-            for turn, _, speaker in diarization_result.itertracks(yield_label=True):
-                start = turn.start
-                end = turn.end
-                text_segment = get_text_segment(segments, start, end)
-                print(f"Start: {start}, End: {end}, Speaker: {speaker}, Text: {text_segment}")
-                if text_segment:
-                    diarization_segments.append({
-                        "start": start,
-                        "end": end,
-                        "speaker": speaker,
-                        "text": text_segment
-                    })
-        except Exception as e:
-            return f"Error during diarization: {e}", 500
+    # Identify and update speaker names
+    speaker_names = identify_speaker_names(transcription, diarization_segments)
+    updated_diarization = update_diarization_with_names(diarization_segments, speaker_names, transcription_segments)
 
-    return flask.render_template("results.html", 
-                                 transcription=transcription, 
-                                 sentiment={"label": sentiment_label, "score": sentiment_score}, 
-                                 diarization=diarization_segments)
+    # Generate HTML response
+    html_response = generate_html(transcription, sentiment_result, updated_diarization)
 
-def get_text_segment(segments, start, end):
-    text = []
-    for segment in segments:
-        segment_start = segment["start"]
-        segment_end = segment["end"]
-        segment_text = segment["text"]
-        
-        # Check if the segment overlaps with the diarization interval
-        if segment_end > start and segment_start < end:
-            # Clip the segment text to the diarization interval
-            if segment_start < start:
-                clip_start = int((start - segment_start) * 1000)
-            else:
-                clip_start = 0
+    return html_response
 
-            if segment_end > end:
-                clip_end = int((end - segment_start) * 1000)
-            else:
-                clip_end = len(segment_text)
-
-            clipped_text = segment_text[clip_start:clip_end].strip()
-            text.append(clipped_text)
-
-    return " ".join(text).strip()
-
-if __name__ == "__main__":
+if __name__ == '__main__':
+    os.makedirs("uploads", exist_ok=True)
     app.run(debug=True)
