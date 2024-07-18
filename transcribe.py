@@ -1,4 +1,5 @@
-from flask import Flask, request, jsonify
+from fastapi import FastAPI, File, UploadFile, HTTPException
+from fastapi.responses import HTMLResponse
 from transformers import pipeline
 from pyannote.audio import Pipeline
 import os
@@ -7,11 +8,16 @@ import torchaudio
 from io import BytesIO
 import whisper
 import html
+from dotenv import load_dotenv
 
-app = Flask(__name__)
+# Load environment variables from .env file
+load_dotenv()
+
+# Initialize FastAPI app
+app = FastAPI()
 
 # Load pre-trained pipelines
-diarization_pipeline = Pipeline.from_pretrained("pyannote/speaker-diarization", use_auth_token="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")
+diarization_pipeline = Pipeline.from_pretrained("pyannote/speaker-diarization", use_auth_token=os.getenv("HF_AUTH_TOKEN"))
 sentiment_pipeline = pipeline("sentiment-analysis", model="distilbert/distilbert-base-uncased-finetuned-sst-2-english")
 
 # Load Whisper model
@@ -114,43 +120,49 @@ def generate_html(transcription, sentiment, diarization):
     """
     return html_content
 
-@app.route('/transcribe', methods=['POST'])
-def transcribe():
-    if 'file' not in request.files:
-        return jsonify({"error": "No file provided"}), 400
-
-    file = request.files['file']
+@app.post("/transcribe", response_class=HTMLResponse)
+async def transcribe(file: UploadFile = File(...)):
     file_path = os.path.join("uploads", file.filename)
-    file.save(file_path)
+    try:
+        with open(file_path, "wb") as f:
+            f.write(await file.read())
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to save file: {str(e)}")
 
-    # Perform transcription using Whisper
-    transcription_result = whisper_model.transcribe(file_path)
-    transcription = transcription_result['text']
+    try:
+        # Perform transcription using Whisper
+        transcription_result = whisper_model.transcribe(file_path)
+        transcription = transcription_result['text']
 
-    # Extract segments from transcription
-    transcription_segments = []
-    for segment in transcription_result['segments']:
-        transcription_segments.append({
-            'start': segment['start'],
-            'end': segment['end'],
-            'text': segment['text']
-        })
+        # Extract segments from transcription
+        transcription_segments = []
+        for segment in transcription_result['segments']:
+            transcription_segments.append({
+                'start': segment['start'],
+                'end': segment['end'],
+                'text': segment['text']
+            })
 
-    # Perform sentiment analysis
-    sentiment_result = sentiment_pipeline(transcription)[0]
+        # Perform sentiment analysis
+        sentiment_result = sentiment_pipeline(transcription)[0]
 
-    # Perform diarization
-    diarization_segments = diarize_audio(file_path)
+        # Perform diarization
+        diarization_segments = diarize_audio(file_path)
 
-    # Identify and update speaker names
-    speaker_names = identify_speaker_names(transcription, diarization_segments)
-    updated_diarization = update_diarization_with_names(diarization_segments, speaker_names, transcription_segments)
+        # Identify and update speaker names
+        speaker_names = identify_speaker_names(transcription, diarization_segments)
+        updated_diarization = update_diarization_with_names(diarization_segments, speaker_names, transcription_segments)
 
-    # Generate HTML response
-    html_response = generate_html(transcription, sentiment_result, updated_diarization)
+        # Generate HTML response
+        html_response = generate_html(transcription, sentiment_result, updated_diarization)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to process audio: {str(e)}")
+    finally:
+        os.remove(file_path)
 
     return html_response
 
 if __name__ == '__main__':
     os.makedirs("uploads", exist_ok=True)
-    app.run(debug=True)
+    import uvicorn
+    uvicorn.run(app, host="127.0.0.1", port=8000)
